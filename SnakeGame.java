@@ -1,3 +1,4 @@
+
 import java.awt.*;
 import java.awt.event.*;
 import java.util.ArrayList;
@@ -7,14 +8,15 @@ import java.util.Timer;
 import java.util.TimerTask;
 import java.util.concurrent.ThreadLocalRandom;
 
-public class SnakeGame extends Frame {
-    String str = "S"; 
+public class SnakeGame extends Frame implements ActionListener, KeyListener {     //implemented action listener
+
+    String str = "S";
     Random rand = new Random();
     int ax = ThreadLocalRandom.current().nextInt(100, 400);
     int ay = ThreadLocalRandom.current().nextInt(100, 400);
-    
+
     List<Point> snakeBody = new ArrayList<>();
-    int initialX = 300; 
+    int initialX = 300;
     int initialY = 300;
 
     boolean GameOver = false;
@@ -24,46 +26,135 @@ public class SnakeGame extends Frame {
     final int INITIAL_SPEED_DELAY = 150;
     int currentSpeedDelay = INITIAL_SPEED_DELAY;
     Timer gameTimer;
-    
+
     // Flag to control growth in the next movement cycle
     boolean shouldGrow = false;
+    boolean paused = false;   //new pause flag inialised as false
+
+    Button pauseButton;
+    Dialog pauseDialog;
+    Button restartButton, resumeButton, quitButton;
 
     SnakeGame() {
         setSize(700, 700);
-        setVisible(true);
+        setLayout(null);
+        setFocusable(true);
+        
 
         snakeBody.add(new Point(initialX, initialY));
         snakeBody.add(new Point(initialX - 10, initialY));
         snakeBody.add(new Point(initialX - 20, initialY));
 
+        //adding a pause button
+        pauseButton = new Button("Pause");
+        pauseButton.setBounds(600, 40, 60, 20);
+        pauseButton.addActionListener(this);
+        add(pauseButton);
+        
+        addKeyListener(this);
         startTimer();
 
-        addKeyListener(new KeyListener() {
-            public void keyPressed(KeyEvent e) {
-                if (GameOver) return;
-                int key = e.getKeyCode();
-                
-                if (key == KeyEvent.VK_UP && dy != 10) {
-                    dx = 0; dy = -10;
-                } else if (key == KeyEvent.VK_DOWN && dy != -10) {
-                    dx = 0; dy = 10;
-                } else if (key == KeyEvent.VK_LEFT && dx != 10) {
-                    dx = -10; dy = 0;
-                } else if (key == KeyEvent.VK_RIGHT && dx != -10) {
-                    dx = 10; dy = 0;
-                }
-            }
-            public void keyReleased(KeyEvent e) {}
-            public void keyTyped(KeyEvent e) {}
-        });
+
+        setVisible(true);
+        requestFocus(); // ensures keys work after launch
 
         addWindowListener(new WindowAdapter() {
+            public void windowActivated(WindowEvent e) {
+                requestFocus(); // regain focus after dialogs
+            }
+
             public void windowClosing(WindowEvent e) {
-                System.exit(0);
                 if (gameTimer != null) gameTimer.cancel();
-                dispose();
+                System.exit(0);
             }
         });
+    }
+
+    public void keyPressed(KeyEvent e) {
+        if (GameOver) {
+            return;
+        }
+        int key = e.getKeyCode();
+
+        // --- Pause toggle with 'P' ---
+        if (key == KeyEvent.VK_P) {
+            if (!paused) {
+                paused = true;
+                showPauseMenu();
+            } else {
+                paused = false;
+                if (pauseDialog != null) {
+                    pauseDialog.dispose();
+                }
+            }
+            return;
+        }
+
+        if (paused) {
+            return; // no movement when paused
+        }
+        // --- Movement controls ---
+        if (key == KeyEvent.VK_UP && dy != 10) {
+            dx = 0;
+            dy = -10;
+        } else if (key == KeyEvent.VK_DOWN && dy != -10) {
+            dx = 0;
+            dy = 10;
+        } else if (key == KeyEvent.VK_LEFT && dx != 10) {
+            dx = -10;
+            dy = 0;
+        } else if (key == KeyEvent.VK_RIGHT && dx != -10) {
+            dx = 10;
+            dy = 0;
+        }
+    }
+
+    public void keyReleased(KeyEvent e) {
+        // not needed but must be implemented
+    }
+
+    public void keyTyped(KeyEvent e) {
+        // not needed but must be implemented
+    }
+
+    //implementing the functioning of all the buttons
+    public void actionPerformed(ActionEvent e) {
+        if (e.getSource() == pauseButton) {
+            if (!paused) {
+                paused = true;
+                showPauseMenu();
+            }
+        } else if (e.getSource() == resumeButton) {
+            paused = false;
+            pauseDialog.dispose();
+        } else if (e.getSource() == quitButton) {
+            System.exit(0);
+        } else if (e.getSource() == restartButton) {
+            paused = false;
+            pauseDialog.dispose();
+            restart();
+        }
+    }
+
+    private void showPauseMenu() {
+        pauseDialog = new Dialog(this, "Paused", true);
+        pauseDialog.setLayout(new GridLayout(3, 1, 40, 40));
+        pauseDialog.setSize(250, 200);
+        pauseDialog.setLocationRelativeTo(this);
+
+        resumeButton = new Button("Resume");
+        restartButton = new Button("Restart");
+        quitButton = new Button("Quit");
+
+        resumeButton.addActionListener(this);
+        restartButton.addActionListener(this);
+        quitButton.addActionListener(this);
+
+        pauseDialog.add(resumeButton);
+        pauseDialog.add(restartButton);
+        pauseDialog.add(quitButton);
+
+        pauseDialog.setVisible(true);
     }
 
     private void startTimer() {
@@ -73,9 +164,10 @@ public class SnakeGame extends Frame {
         gameTimer = new Timer();
         gameTimer.schedule(new TimerTask() {
             public void run() {
-                if (!GameOver) {
-                    touch(); 
+                if (!GameOver && !paused) {
+                    touch();
                     moveSnake();
+                    repaint();
 
                     Point head = snakeBody.get(0);
                     if (head.x < 0 || head.x > getWidth() - 10 || head.y < 40 || head.y > getHeight() - 40) {
@@ -104,9 +196,9 @@ public class SnakeGame extends Frame {
     private void moveSnake() {
         Point head = snakeBody.get(0);
         Point newHead = new Point(head.x + dx, head.y + dy);
-        
+
         snakeBody.add(0, newHead);
-        
+
         // --- START: GROWTH LOGIC ---
         if (!shouldGrow) {
             // Remove the tail only if growth is NOT required
@@ -117,7 +209,7 @@ public class SnakeGame extends Frame {
         }
         // --- END: GROWTH LOGIC ---
     }
-    
+
     private boolean checkSelfCollision() {
         Point head = snakeBody.get(0);
         for (int i = 1; i < snakeBody.size(); i++) {
@@ -164,11 +256,11 @@ public class SnakeGame extends Frame {
         snakeBody.add(new Point(initialX, initialY));
         snakeBody.add(new Point(initialX - 10, initialY));
         snakeBody.add(new Point(initialX - 20, initialY));
-        
+
         dx = 10;
         dy = 0;
-        str = "S"; 
-        
+        str = "S";
+
         ax = ThreadLocalRandom.current().nextInt(100, 400);
         ay = ThreadLocalRandom.current().nextInt(100, 400);
         score = 0;
@@ -182,7 +274,7 @@ public class SnakeGame extends Frame {
 
     public void touch() {
         Point head = snakeBody.get(0);
-        
+
         if (Math.abs(head.x - ax) < 10 && Math.abs(head.y - ay) < 10) {
             score++;
             shouldGrow = true; // Set the flag to true to prevent tail removal in moveSnake()
@@ -197,8 +289,8 @@ public class SnakeGame extends Frame {
 
             for (Point p : snakeBody) {
                 if (Math.abs(p.x - ax) < 10 && Math.abs(p.y - ay) < 10) {
-                    touch(); 
-                    return; 
+                    touch();
+                    return;
                 }
             }
         }
@@ -211,7 +303,6 @@ public class SnakeGame extends Frame {
 // List stores all segments (Points), replacing single (sx, sy) for a true body structure.
 
 // Variables for Speed/Difficulty Increase: Timer delay decreases (speeds up) as score increases.
-
 // True Snake Movement: Adds new head, removes tail. If shouldGrow is true (food eaten), tail removal is skipped.
 
 // Collision Checks: Includes check for boundary hit and self-collision (head vs body segments).
